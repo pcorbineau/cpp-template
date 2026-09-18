@@ -1,0 +1,3 @@
+add_executable(libtemplate_tests test_adder.cpp)
+target_link_libraries(libtemplate_tests PRIVATE doctest::doctest libtemplate)
+doctest_discover_tests(libtemplate_tests)
