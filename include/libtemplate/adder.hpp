@@ -40,4 +40,25 @@ namespace libtemplate {
  */
 auto add(int a, int b) -> int;
 
+/**
+ * Adds two values together with an additional offset.
+ *
+ * Computes the sum of @p x, @p y and @p offset. Being a template, this
+ * works for any type @p T that supports `operator+` and is copyable.
+ *
+ * @tparam T The type of the operands and of the result.
+ * @param x The first operand.
+ * @param y The second operand.
+ * @param offset The value added on top of the sum of @p x and @p y.
+ * @return The sum of @p x, @p y and @p offset.
+ *
+ * ```cpp
+ * auto result = libtemplate::add_with_offset(10, 20, 5); // returns 35
+ * ```
+ */
+template <typename T>
+auto add_with_offset(T x, T y, T offset) -> T {
+    return x + y + offset;
+}
+
 } // namespace libtemplate
