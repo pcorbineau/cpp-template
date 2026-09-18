@@ -1,4 +1,4 @@
-# Introduction
+# libtemplate
 
 A minimal C++23 template library providing common utility functions.
 
