@@ -2,6 +2,17 @@
 site_name = "libtemplate"
 site_description = "A minimal C++23 template library providing common utility functions."
 
+# Explicit navigation: only the entry points are listed, so the generated API
+# and coverage pages do not expose their internal directory depth in the
+# sidebar. The coverage entry is injected by CMake only when coverage is
+# enabled (see cmake/docs.cmake); the deeper coverage pages stay reachable
+# through the report's own links.
+nav = [
+  { "Introduction" = "index.md" },
+  { "API" = "api/index.md" },
+  { "Code coverage" = "coverage/index.md" },
+]
+
 # Paths are resolved relative to this file. The CMake build copies this file
 # into the build tree, where site_dir resolves inside the build directory.
 docs_dir = "docs"

@@ -1,11 +1,11 @@
-# libtemplate
+# Introduction
 
 A minimal C++23 template library providing common utility functions.
 
 !!! abstract "What's inside"
 
     Integer arithmetic utilities exposed through the `libtemplate`
-    namespace. See the [API reference](api/adder.md) for the full list of
+    namespace. See the [API reference](api/index.md) for the full list of
     functions.
 
 ## Quick start

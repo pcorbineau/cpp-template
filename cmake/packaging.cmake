@@ -2,7 +2,7 @@
 #
 # Configure with -DLIBTEMPLATE_BUILD_RELEASE=ON to produce distributable
 # archives that ship the library, its headers and the offline documentation
-# under share/docs. Then run the 'release' target (or 'package') to build the
+# under share/docs. Then run the 'package' target to build the
 # archives into the 'dist' directory of the build tree.
 #
 # The offline documentation is only generated when DOCS_OFFLINE is ON, so the
@@ -26,6 +26,16 @@ if(NOT DOCS_OFFLINE)
   message(STATUS "Release packaging: forcing DOCS_OFFLINE=ON for share/docs")
 endif()
 
+# Coverage reports are a development aid and must never reach a distributable
+# archive, so a release build always turns the instrumentation off.
+if(LIBTEMPLATE_ENABLE_COVERAGE)
+  set(LIBTEMPLATE_ENABLE_COVERAGE OFF CACHE BOOL
+    "Instrument the library and include a Doxide code coverage report in the docs"
+    FORCE
+  )
+  message(STATUS "Release packaging: forcing LIBTEMPLATE_ENABLE_COVERAGE=OFF")
+endif()
+
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_VENDOR "${PROJECT_NAME}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
@@ -43,14 +53,3 @@ if(WIN32)
 endif()
 
 include(CPack)
-
-# Convenience target: build the offline documentation first, then package.
-# 'package' is provided by CPack; docs must be generated before CPack snapshots
-# the install tree, hence the explicit dependency.
-add_custom_target(release
-  COMMAND ${CMAKE_CPACK_COMMAND}
-  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-  COMMENT "Packaging release archives into ${CPACK_PACKAGE_DIRECTORY}"
-  VERBATIM
-)
-add_dependencies(release docs)

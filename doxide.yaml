@@ -1,0 +1,27 @@
+# Doxide configuration for the generated API reference and coverage report.
+#
+# The CMake 'docs' targets run `doxide build` from the source tree and pass the
+# output directory on the command line, so the generated Markdown lands in the
+# build tree rather than next to the sources.
+#
+# The public headers and the library sources are both listed: Doxide renders the
+# API reference from them and, when a coverage report is supplied, includes the
+# corresponding per-file coverage pages. Tests are excluded.
+#
+# `**/` requires at least one subdirectory, so the plain `*` patterns are needed
+# too to match files that sit directly in include/ or src/.
+
+title: libtemplate
+description: A minimal C++23 template library providing common utility functions.
+
+files:
+  - "include/*.hpp"
+  - "include/*.h"
+  - "include/**/*.hpp"
+  - "include/**/*.h"
+  - "src/*.hpp"
+  - "src/*.h"
+  - "src/*.cpp"
+  - "src/**/*.hpp"
+  - "src/**/*.h"
+  - "src/**/*.cpp"
