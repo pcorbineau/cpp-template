@@ -105,6 +105,12 @@ set(DOCS_ZENSICAL_CONFIG "${CMAKE_BINARY_DIR}/zensical.toml")
 # tree and the Markdown sources are staged next to it. docs_dir ("docs") and
 # site_dir ("site") then resolve inside ${CMAKE_BINARY_DIR}, and custom_dir is
 # repointed at the absolute overrides directory in the source tree.
+# The config below is generated at configure time, so re-run configure whenever
+# the source template changes; otherwise the build tree keeps a stale nav.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_SOURCE_DIR}/zensical.toml"
+)
+
 file(READ "${CMAKE_SOURCE_DIR}/zensical.toml" DOCS_ZENSICAL_TOML)
 string(REPLACE
   "custom_dir = \"docs/overrides\""
