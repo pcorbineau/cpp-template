@@ -1,150 +1,117 @@
-# Documentation targets built with Doxide and MkDocs.
+# Documentation targets built with Zensical.
 #
-# Two modes are available:
+#   docs / docs-serve   Build or serve the documentation site.
 #
-#   default    Build or serve the API documentation only.
-#   coverage   Configure a dedicated build directory with
-#              -DLIBTEMPLATE_ENABLE_COVERAGE=ON to also instrument the code,
-#              run the tests, collate the .gcda data and feed it to Doxide.
-#              See https://doxide.org/coverage/ for the workflow.
+# Zensical reads zensical.toml and renders the Markdown sources under docs/
+# into the build tree. The source tree is only read; every generated file is
+# written to the build tree.
 #
-# The source tree is only read; every generated file is written to the build
-# tree, so a default build stays free of coverage flags.
+# Offline packaging is opt-in: configure with -DDOCS_OFFLINE=ON when the
+# documentation is going to be distributed alongside the library (e.g. by
+# CPack as share/docs) or otherwise served without a web server. That build
+# bundles the search index, self-hosts the iframe-worker polyfill and drops the
+# fetch-based instant navigation features. Defaults to OFF so normal builds keep
+# the richer online navigation.
 
-option(LIBTEMPLATE_ENABLE_COVERAGE
-  "Instrument the build for Doxide code coverage reports (use a separate build directory)"
+option(DOCS_OFFLINE
+  "Build the documentation for offline use (CPack share/docs, file:// access)"
   OFF
 )
 
-# --- Required tools -----------------------------------------------------------
-
-find_program(DOXIDE_EXECUTABLE doxide)
-if(NOT DOXIDE_EXECUTABLE)
-  message(WARNING "doxide not found, 'docs' targets will not be available")
+# Prefer an install inside the project virtual environment so `zensical` does
+# not have to be on the global PATH. Create it once with:
+#
+#   python3 -m venv .venv && .venv/bin/pip install zensical
+#
+# then reconfigure before using the targets.
+find_program(ZENSICAL_EXECUTABLE zensical
+  HINTS "${CMAKE_SOURCE_DIR}/.venv/bin" "${CMAKE_SOURCE_DIR}/.venv/Scripts"
+)
+if(NOT ZENSICAL_EXECUTABLE)
+  message(STATUS
+    "zensical not found, 'docs' targets will not be available "
+    "(install it with: python3 -m venv .venv && .venv/bin/pip install zensical)")
   return()
 endif()
 
-find_program(MKDOCS_EXECUTABLE mkdocs)
-if(NOT MKDOCS_EXECUTABLE)
-  message(WARNING "mkdocs not found, 'docs' targets will not be available")
-  return()
-endif()
+set(DOCS_SOURCE_DIR     "${CMAKE_SOURCE_DIR}/docs")
+set(DOCS_DOCS_DIR       "${CMAKE_BINARY_DIR}/docs")
+set(DOCS_SITE_DIR       "${CMAKE_BINARY_DIR}/site")
+set(DOCS_ZENSICAL_CONFIG "${CMAKE_BINARY_DIR}/zensical.toml")
 
-find_program(GCOV_EXECUTABLE gcov)
-find_program(BASH_EXECUTABLE bash)
-if(NOT BASH_EXECUTABLE)
-  set(BASH_EXECUTABLE sh)
-endif()
-
-# --- Coverage mode ------------------------------------------------------------
-
-set(COVERAGE_ENABLED OFF)
-if(LIBTEMPLATE_ENABLE_COVERAGE)
-  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    message(WARNING "coverage instrumentation is only supported with GCC or Clang; disabling")
-  elseif(NOT GCOV_EXECUTABLE)
-    message(WARNING "gcov not found; disabling coverage instrumentation")
-  else()
-    set(COVERAGE_ENABLED ON)
-  endif()
-else()
-  message(STATUS "Coverage reports disabled; configure with -DLIBTEMPLATE_ENABLE_COVERAGE=ON for 'docs' with coverage")
-endif()
-
-if(COVERAGE_ENABLED)
-  # Flags recommended by https://doxide.org/coverage/ for GCC and Clang.
-  set(COVERAGE_FLAGS --coverage -O0 -fno-inline -fno-elide-constructors)
-  message(STATUS "Coverage instrumentation enabled (${COVERAGE_FLAGS})")
-
-  target_compile_options(libtemplate PRIVATE ${COVERAGE_FLAGS})
-  target_link_options(libtemplate PUBLIC --coverage)
-
-  if(TARGET libtemplate_tests)
-    target_compile_options(libtemplate_tests PRIVATE ${COVERAGE_FLAGS})
-    target_link_options(libtemplate_tests PRIVATE --coverage)
-  endif()
-endif()
-
-# --- Generated file locations (all inside the build tree) ---------------------
-
-set(DOCS_COVERAGE_FILE "${CMAKE_BINARY_DIR}/coverage.gcov")
-set(DOCS_DOXIDE_DIR    "${CMAKE_BINARY_DIR}/docs")
-set(DOCS_MKDOCS_CONFIG "${CMAKE_BINARY_DIR}/mkdocs.yaml")
-set(DOCS_SITE_DIR      "${CMAKE_BINARY_DIR}/site")
-set(DOCS_SOURCE_DIR    "${CMAKE_SOURCE_DIR}/docs")
-set(DOCS_THEME_DIR     "${DOCS_SOURCE_DIR}/overrides")
-
-# MkDocs has no --docs-dir option, so generate a config in the build tree that
-# inherits the source config and repoints both directories. Relative paths from
-# the source config would resolve against the generated file, hence the
-# absolute custom_dir override.
-file(WRITE "${DOCS_MKDOCS_CONFIG}"
-  "INHERIT: ${CMAKE_SOURCE_DIR}/mkdocs.yaml\n"
-  "docs_dir: ${DOCS_DOXIDE_DIR}\n"
-  "site_dir: ${DOCS_SITE_DIR}\n"
-  "theme:\n"
-  "  custom_dir: ${DOCS_THEME_DIR}\n"
+# Zensical requires both docs_dir and site_dir to live within the directory of
+# the configuration file, so the source zensical.toml is copied into the build
+# tree and the Markdown sources are staged next to it. docs_dir ("docs") and
+# site_dir ("site") then resolve inside ${CMAKE_BINARY_DIR}, and custom_dir is
+# repointed at the absolute overrides directory in the source tree.
+file(READ "${CMAKE_SOURCE_DIR}/zensical.toml" DOCS_ZENSICAL_TOML)
+string(REPLACE
+  "custom_dir = \"../overrides\""
+  "custom_dir = \"${CMAKE_SOURCE_DIR}/overrides\""
+  DOCS_ZENSICAL_TOML "${DOCS_ZENSICAL_TOML}"
 )
 
-# --- Static assets ------------------------------------------------------------
+if(DOCS_OFFLINE)
+  set(DOCS_OFFLINE_BLOCK [=[
+# Offline support: bundle the search index so it works when the site
+# directory is served or shipped without a web server.
+[project.plugins.offline]
 
-# Doxide only writes Markdown, so the static assets referenced by mkdocs.yaml
-# (extra_css/extra_javascript) are copied into the build-tree docs_dir. Absent
-# directories are skipped with a warning.
-set(DOCS_COPY_ASSETS)
-foreach(_asset stylesheets javascripts)
-  if(EXISTS "${DOCS_SOURCE_DIR}/${_asset}")
-    list(APPEND DOCS_COPY_ASSETS
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${DOCS_SOURCE_DIR}/${_asset}" "${DOCS_DOXIDE_DIR}/${_asset}"
-    )
-  else()
-    message(WARNING "docs asset directory not found: ${DOCS_SOURCE_DIR}/${_asset}")
-  endif()
-endforeach()
-
-# --- Commands shared by the 'docs' and 'docs-serve' targets -------------------
-
-set(DOCS_GENERATE_COMMANDS)
-set(DOXIDE_COVERAGE_OPTION)
-
-if(COVERAGE_ENABLED)
-  # The gcov collation needs a shell for the pipe and output redirection.
-  set(DOXIDE_COVERAGE_OPTION --coverage "${DOCS_COVERAGE_FILE}")
-  list(APPEND DOCS_GENERATE_COMMANDS
-    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir "${CMAKE_BINARY_DIR}" --output-on-failure
-    COMMAND ${BASH_EXECUTABLE} -c
-      "find '${CMAKE_BINARY_DIR}' -name '*.gcda' | xargs '${GCOV_EXECUTABLE}' --stdout > '${DOCS_COVERAGE_FILE}'"
+# Self-hosted polyfill for the file:// scheme; the iframe-worker name
+# keeps Zensical from fetching the shim from unpkg.com.
+[project.extra]
+polyfills = [
+  { path = "javascripts/iframe-worker-shim.js", type = "text/javascript", async = false, defer = false },
+]
+]=])
+  string(REGEX REPLACE
+    "# --- offline:begin ---.*# --- offline:end ---"
+    "${DOCS_OFFLINE_BLOCK}"
+    DOCS_ZENSICAL_TOML "${DOCS_ZENSICAL_TOML}"
   )
-  set(DOCS_LABEL "Documentation with coverage")
-else()
-  set(DOCS_LABEL "Documentation")
+  string(REPLACE
+    "variant = \"modern\""
+    "variant = \"modern\"\nfont = false"
+    DOCS_ZENSICAL_TOML "${DOCS_ZENSICAL_TOML}"
+  )
+  string(REPLACE
+    "  \"navigation.instant\",\n  \"navigation.instant.prefetch\",\n"
+    ""
+    DOCS_ZENSICAL_TOML "${DOCS_ZENSICAL_TOML}"
+  )
+  message(STATUS "Documentation offline mode enabled (DOCS_OFFLINE=ON)")
 endif()
 
-list(APPEND DOCS_GENERATE_COMMANDS
-  COMMAND ${DOXIDE_EXECUTABLE} build ${DOXIDE_COVERAGE_OPTION} --output "${DOCS_DOXIDE_DIR}"
-  ${DOCS_COPY_ASSETS}
-)
+file(WRITE "${DOCS_ZENSICAL_CONFIG}" "${DOCS_ZENSICAL_TOML}")
 
-# --- Targets ------------------------------------------------------------------
+set(DOCS_STAGE_COMMANDS
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "${DOCS_SOURCE_DIR}" "${DOCS_DOCS_DIR}"
+)
 
 add_custom_target(docs
-  ${DOCS_GENERATE_COMMANDS}
-  COMMAND ${MKDOCS_EXECUTABLE} build -f "${DOCS_MKDOCS_CONFIG}"
+  ${DOCS_STAGE_COMMANDS}
+  COMMAND ${ZENSICAL_EXECUTABLE} build -f "${DOCS_ZENSICAL_CONFIG}"
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-  COMMENT "${DOCS_LABEL} (Doxide + MkDocs) in ${CMAKE_BINARY_DIR}"
+  COMMENT "Documentation in ${DOCS_SITE_DIR}"
   VERBATIM
 )
 
 add_custom_target(docs-serve
-  ${DOCS_GENERATE_COMMANDS}
-  COMMAND ${MKDOCS_EXECUTABLE} serve -f "${DOCS_MKDOCS_CONFIG}"
+  ${DOCS_STAGE_COMMANDS}
+  COMMAND ${ZENSICAL_EXECUTABLE} serve -f "${DOCS_ZENSICAL_CONFIG}"
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-  COMMENT "Serving ${DOCS_LABEL} (Doxide + MkDocs) from ${CMAKE_BINARY_DIR}"
+  COMMENT "Serving documentation from ${CMAKE_BINARY_DIR}"
   VERBATIM
 )
 
-if(COVERAGE_ENABLED)
-  add_dependencies(docs libtemplate_tests)
-  add_dependencies(docs-serve libtemplate_tests)
+# --- Installation -------------------------------------------------------------
+
+# Ship the rendered site so packaging (CPack) can distribute it as share/docs
+# alongside the library. Only sensible for an offline build, which is why the
+# install rule is guarded by DOCS_OFFLINE.
+if(DOCS_OFFLINE)
+  install(DIRECTORY "${DOCS_SITE_DIR}/"
+    DESTINATION "share/docs"
+    COMPONENT documentation
+  )
 endif()
