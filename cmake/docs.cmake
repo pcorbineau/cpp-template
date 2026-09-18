@@ -46,8 +46,8 @@ set(DOCS_ZENSICAL_CONFIG "${CMAKE_BINARY_DIR}/zensical.toml")
 # repointed at the absolute overrides directory in the source tree.
 file(READ "${CMAKE_SOURCE_DIR}/zensical.toml" DOCS_ZENSICAL_TOML)
 string(REPLACE
-  "custom_dir = \"../overrides\""
-  "custom_dir = \"${CMAKE_SOURCE_DIR}/overrides\""
+  "custom_dir = \"docs/overrides\""
+  "custom_dir = \"${CMAKE_SOURCE_DIR}/docs/overrides\""
   DOCS_ZENSICAL_TOML "${DOCS_ZENSICAL_TOML}"
 )
 

@@ -25,7 +25,7 @@ extra_javascript = [
 
 [project.theme]
 variant = "modern"
-custom_dir = "../overrides"
+custom_dir = "docs/overrides"
 features = [
   "content.code.annotate",
   "content.code.copy",
