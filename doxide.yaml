@@ -1,0 +1,7 @@
+title: libtemplate
+description: A minimal C++23 template library providing common utility functions.
+files:
+  - "*.hpp"
+  - "**/*.hpp"
+  - "*.h"
+  - "**/*.h"
